@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#10131a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Rota Entrega</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+  :root{
+    --bg: #10131a;
+    --surface: #1b2029;
+    --surface-2: #232a35;
+    --line: #2b3340;
+    --orange: #ff5722;
+    --yellow: #ffd166;
+    --text: #f4f6f8;
+    --muted: #8891a3;
+    --danger: #ff5a5a;
+    --success: #4ade80;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text); overflow-x:hidden; width:100%;}
+  html{height:-webkit-fill-available;}
+  body{
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    overscroll-behavior:none;
+    min-height:100vh; min-height:-webkit-fill-available;
+    padding-bottom:calc(100px + env(safe-area-inset-bottom));
+  }
+  button, .tab, .btn, .fab{ touch-action:manipulation; -webkit-user-select:none; user-select:none; }
+  input, textarea{ font-size:16px; touch-action:manipulation; }
+  h1,h2,.num,.stat-value{font-family:'Barlow Condensed',system-ui,sans-serif;}
+
+  header{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg, var(--bg) 80%, transparent);
+    padding:calc(14px + env(safe-area-inset-top)) 16px 10px;
+  }
+  .headrow{display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; row-gap:8px; column-gap:8px;}
+  h1{font-size:clamp(20px,6vw,26px); font-weight:700; letter-spacing:0.3px; margin:0; line-height:1; white-space:nowrap;}
+  h1 span{color:var(--orange);}
+  .headrow-right{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .gps-chip{
+    display:flex; align-items:center; gap:6px;
+    font-size:12px; color:var(--muted);
+    background:var(--surface); border:1px solid var(--line);
+    padding:7px 10px; border-radius:20px;
+    font-family:inherit;
+    min-height:32px;
+  }
+  button.gps-chip{ white-space:nowrap; }
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--muted); flex-shrink:0;}
+  .dot.on{background:var(--success); box-shadow:0 0 6px var(--success);}
+  .dot.off{background:var(--danger);}
+
+  .tabs{display:flex; gap:8px; margin-top:14px;}
+  .tab{
+    flex:1; text-align:center; padding:11px 4px; border-radius:10px;
+    font-size:13px; font-weight:600; color:var(--muted);
+    background:var(--surface); border:1px solid var(--line); cursor:pointer;
+    min-height:40px;
+  }
+  .tab.active{background:var(--orange); color:#1a0d05; border-color:var(--orange);}
+
+  main{padding:14px 16px 8px;}
+  .empty{
+    text-align:center; color:var(--muted); font-size:14px;
+    padding:60px 20px; border:1px dashed var(--line); border-radius:14px; margin-top:10px;
+  }
+  .empty b{color:var(--text); display:block; font-size:17px; margin-bottom:6px; font-family:'Barlow Condensed'; font-weight:700;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:14px; padding:14px; margin-bottom:12px;
+    position:relative; overflow:hidden;
+  }
+  .card::before{
+    content:''; position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:var(--success);
+  }
+  .card.delivered::before{background:var(--orange);}
+  .card-top{display:flex; gap:12px; align-items:flex-start;}
+  .num{
+    flex-shrink:0; width:32px; height:32px; border-radius:50%;
+    background:var(--surface-2); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:700; color:var(--yellow);
+  }
+  .card.delivered .num{color:var(--orange);}
+  .info{flex:1; min-width:0;}
+  .nome{font-size:16px; font-weight:600; margin:0 0 2px;}
+  .end{font-size:13px; color:var(--muted); margin:0; line-height:1.4; word-break:break-word;}
+  .tel{font-size:12px; color:var(--muted); margin-top:2px;}
+
+  .stats{display:flex; gap:14px; margin:10px 0 4px; padding-left:44px;}
+  .stat{display:flex; align-items:center; gap:6px;}
+  .stat-value{font-size:15px; font-weight:700;}
+  .stat-label{font-size:11px; color:var(--muted);}
+  .arrow{
+    display:inline-block; width:18px; height:18px;
+    transition:transform 0.15s linear;
+    color:var(--yellow);
+  }
+  .no-loc{font-size:12px; color:var(--muted); padding-left:44px; font-style:italic;}
+
+  .actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; padding-left:44px;}
+  .btn{
+    border:none; border-radius:9px; padding:10px 13px; font-size:13px;
+    font-weight:600; cursor:pointer; display:flex; align-items:center; gap:5px;
+    min-height:40px;
+  }
+  .btn-primary{background:var(--orange); color:#1a0d05;}
+  .btn-ghost{background:var(--surface-2); color:var(--text); border:1px solid var(--line);}
+  .btn-success{background:transparent; color:var(--success); border:1px solid var(--success);}
+  .btn-danger{background:transparent; color:var(--danger); border:1px solid var(--danger);}
+  .btn-edit{background:transparent; color:var(--muted); border:1px solid var(--line);}
+
+  .fab{
+    position:fixed; right:18px; bottom:calc(22px + env(safe-area-inset-bottom)); z-index:30;
+    background:var(--orange); color:#1a0d05; border:none;
+    border-radius:50px; padding:16px 22px; font-size:15px; font-weight:700;
+    display:flex; align-items:center; gap:8px; cursor:pointer;
+    box-shadow:0 6px 18px rgba(255,87,34,0.35);
+  }
+
+  .sheet-bg{
+    position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:40;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .sheet-bg.open{display:flex;}
+  .sheet{
+    background:var(--surface); width:100%; max-width:520px;
+    border-radius:20px 20px 0 0; padding:20px 18px calc(26px + env(safe-area-inset-bottom));
+    max-height:88vh; overflow-y:auto;
+  }
+  .sheet h2{font-size:22px; margin:0 0 14px; font-weight:700;}
+  label{font-size:12px; color:var(--muted); display:block; margin:12px 0 5px; font-weight:600;}
+  input[type=text], textarea{
+    width:100%; background:var(--surface-2); border:1px solid var(--line);
+    color:var(--text); border-radius:9px; padding:12px; font-size:16px;
+    font-family:inherit;
+  }
+  textarea{resize:vertical; min-height:56px;}
+  .adv-toggle{font-size:12px; color:var(--yellow); margin-top:14px; cursor:pointer; display:inline-block; padding:6px 0;}
+  .adv-fields{display:none; grid-template-columns:1fr 1fr; gap:10px;}
+  .adv-fields.open{display:grid;}
+  .sheet-actions{display:flex; gap:10px; margin-top:20px;}
+  .sheet-actions .btn{flex:1; padding:14px; justify-content:center; font-size:14px; min-height:48px;}
+  .close-x{position:absolute; top:14px; right:14px; background:none; border:none; color:var(--muted); font-size:22px; cursor:pointer; padding:8px; line-height:1;}
+
+  #mapaView{display:none; padding:0 16px 14px;}
+  #mapaLeaflet{height:66vh; border-radius:14px; overflow:hidden; border:1px solid var(--line);}
+  .map-legend{display:flex; gap:16px; margin-top:10px; font-size:12px; color:var(--muted);}
+  .map-legend span{display:inline-flex; align-items:center; gap:5px;}
+  .legend-dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
+
+  .btn-map-pick{
+    width:100%; margin-top:12px; background:var(--surface-2); color:var(--yellow);
+    border:1px solid var(--yellow); border-radius:9px; padding:11px; font-size:14px;
+    font-weight:600; cursor:pointer;
+  }
+  .picker-bg{
+    position:fixed; inset:0; background:var(--bg); z-index:60; display:none; flex-direction:column;
+  }
+  .picker-bg.open{display:flex;}
+  .picker-top{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:calc(14px + env(safe-area-inset-top)) 16px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .picker-top h3{margin:0; font-size:16px; font-weight:600;}
+  #pickerMap{flex:1;}
+  .picker-hint{
+    text-align:center; font-size:12px; color:var(--muted);
+    padding:8px 16px; background:var(--surface);
+  }
+  .picker-bottom{padding:14px 16px calc(14px + env(safe-area-inset-bottom)); display:flex; gap:10px;}
+  .picker-bottom .btn{flex:1; padding:14px; justify-content:center; font-size:14px; min-height:48px;}
+
+  .foto-row{display:flex; align-items:center; gap:12px; margin:6px 0 4px;}
+  .foto-preview{
+    width:56px; height:56px; border-radius:10px; background:var(--surface-2);
+    border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+    overflow:hidden; flex-shrink:0;
+  }
+  .foto-preview img{width:100%; height:100%; object-fit:cover;}
+  .foto-placeholder{font-size:22px; opacity:0.5;}
+  .foto-row .btn{padding:7px 10px; font-size:12px; margin-right:6px;}
+  .card-fotos{display:flex; gap:8px; margin-top:8px;}
+  .card-fotos img{width:56px; height:56px; border-radius:10px; object-fit:cover; border:1px solid var(--line); cursor:pointer;}
+  .card-fotos .foto-item{display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .card-fotos .foto-item span{font-size:10px; color:var(--muted);}
+
+  .lightbox-bg{
+    position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:70;
+    display:none; align-items:center; justify-content:center;
+    padding:20px; padding-bottom:calc(20px + env(safe-area-inset-bottom));
+  }
+  .lightbox-bg.open{display:flex;}
+  .lightbox-bg img{max-width:100%; max-height:85vh; border-radius:12px; object-fit:contain;}
+  .lightbox-close{
+    position:absolute; top:calc(16px + env(safe-area-inset-top)); right:16px;
+    background:rgba(255,255,255,0.12); border:none; color:#fff; font-size:22px;
+    width:40px; height:40px; border-radius:50%; cursor:pointer;
+  }
+  .lightbox-label{
+    position:absolute; bottom:calc(24px + env(safe-area-inset-bottom));
+    left:0; right:0; text-align:center; color:var(--muted); font-size:13px;
+  }
+
+  .lock-bg{
+    position:fixed; inset:0; background:var(--bg); z-index:100;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .lock-box{width:100%; max-width:340px; text-align:center;}
+  .lock-icon{font-size:40px; margin-bottom:10px;}
+  .lock-box h2{font-size:20px; margin:0 0 6px; font-weight:700;}
+  .lock-input{
+    width:100%; background:var(--surface-2); border:1px solid var(--line);
+    color:var(--text); border-radius:10px; padding:14px; font-size:22px;
+    text-align:center; letter-spacing:8px; font-family:inherit;
+  }
+
+  .search-wrap{
+    display:flex; align-items:center; gap:8px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:12px; padding:0 12px; margin-top:10px;
+  }
+  .search-wrap .search-icon{font-size:15px; opacity:0.7; flex-shrink:0;}
+  .search-wrap input{
+    flex:1; background:transparent; border:none; color:var(--text);
+    font-size:16px; padding:11px 0; font-family:inherit; min-width:0;
+  }
+  .search-wrap input:focus{outline:none;}
+  .search-wrap input::placeholder{color:var(--muted);}
+  .search-clear{
+    background:none; border:none; color:var(--muted); font-size:18px;
+    cursor:pointer; padding:6px; line-height:1; flex-shrink:0;
+  }
+  body.no-scroll{ overflow:hidden; touch-action:none; }
+  main, .sheet, #mapaView{ -webkit-overflow-scrolling:touch; }
+</style>
+</head>
+<body>
+
+<div class="lock-bg" id="lockBg">
+  <div class="lock-box">
+    <div class="lock-icon">🔒</div>
+    <h2 id="lockTitulo">Digite seu PIN</h2>
+    <p id="lockSub" style="font-size:13px; color:var(--muted); margin:0 0 18px;">Só você tem acesso a esse app.</p>
+    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="lockInput" class="lock-input" placeholder="••••" autocomplete="off" onkeydown="if(event.key==='Enter') lockSubmit()">
+    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="lockInput2" class="lock-input" placeholder="Confirme o PIN" style="display:none; margin-top:10px;" autocomplete="off" onkeydown="if(event.key==='Enter') lockSubmit()">
+    <p id="lockErro" style="display:none; color:var(--danger); font-size:13px; margin:12px 0 0;"></p>
+    <button class="btn btn-primary" id="lockBtn" style="width:100%; justify-content:center; margin-top:18px; padding:14px; min-height:48px;" onclick="lockSubmit()">Entrar</button>
+  </div>
+</div>
+
+<div id="appContent" style="display:none;">
+
+<header>
+  <div class="headrow">
+    <h1>Rota<span>Entrega</span></h1>
+    <div class="headrow-right">
+      <button class="gps-chip" style="border:1px solid var(--line); color:var(--muted); cursor:pointer;" onclick="bloquearAgora()" aria-label="Bloquear app">🔒</button>
+      <button class="gps-chip" style="border:1px solid var(--line); color:var(--muted); cursor:pointer;" onclick="abrirConfigForm()" aria-label="Trocar PIN">⚙️</button>
+      <button class="gps-chip" style="border:1px solid var(--yellow); color:var(--yellow); cursor:pointer;" onclick="abrirOrigemForm()" aria-label="Ponto de partida (estabelecimento)">🏪 Local</button>
+      <div class="gps-chip"><span class="dot" id="gpsDot"></span><span id="gpsText">GPS...</span></div>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" id="tabPendentes" onclick="setTab('pendentes')">Rota de hoje</div>
+    <div class="tab" id="tabTodos" onclick="setTab('todos')">Todos os clientes</div>
+    <div class="tab" id="tabMapa" onclick="setTab('mapa')">Mapa</div>
+  </div>
+  <div class="search-wrap" id="searchWrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Buscar cliente pelo nome..." oninput="onSearchInput(this.value)">
+    <button class="search-clear" id="searchClear" style="display:none;" onclick="limparBusca()">×</button>
+  </div>
+</header>
+
+<main id="lista"></main>
+
+<div id="mapaView">
+  <div id="mapaLeaflet"></div>
+  <div class="map-legend">
+    <span><span class="legend-dot" style="background:#4a90ff"></span>estabelecimento</span>
+    <span><span class="legend-dot" style="background:var(--success)"></span>pendente</span>
+    <span><span class="legend-dot" style="background:var(--orange)"></span>entregue</span>
+  </div>
+  <p style="font-size:12px; color:var(--muted); margin-top:10px;">Toque num pino pra editar aquele cliente. O mapa precisa de internet pra carregar (use no estabelecimento); as coordenadas continuam salvas e funcionando offline nas outras abas.</p>
+</div>
+
+<button class="fab" onclick="abrirForm()">+ Cliente</button>
+
+<div class="sheet-bg" id="sheetBg">
+  <div class="sheet">
+    <button class="close-x" onclick="fecharForm()">×</button>
+    <h2 id="formTitulo">Novo cliente</h2>
+    <input type="hidden" id="editId">
+    <p id="formErro" style="display:none; color:var(--danger); font-size:13px; background:rgba(255,90,90,0.1); border:1px solid var(--danger); border-radius:8px; padding:8px 10px; margin:0 0 6px;"></p>
+    <label>Nome do cliente</label>
+    <input type="text" id="fNome" placeholder="Ex: Maria da Padaria">
+    <label>Endereço</label>
+    <textarea id="fEndereco" placeholder="Rua, número, bairro, referência..."></textarea>
+    <label>Telefone (opcional)</label>
+    <input type="text" id="fTel" placeholder="(82) 9....">
+
+    <label>Foto da pessoa (opcional)</label>
+    <div class="foto-row">
+      <div class="foto-preview" id="previewPessoa"><span class="foto-placeholder">👤</span></div>
+      <div>
+        <input type="file" id="fFotoPessoaInput" accept="image/*" capture="environment" style="display:none" onchange="handleFoto(this,'pessoa')">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('fFotoPessoaInput').click()">Escolher foto</button>
+        <button type="button" class="btn btn-ghost" id="btnRemoverPessoa" style="display:none" onclick="removerFoto('pessoa')">Remover</button>
+      </div>
+    </div>
+
+    <label>Foto da frente da casa (opcional)</label>
+    <div class="foto-row">
+      <div class="foto-preview" id="previewCasa"><span class="foto-placeholder">🏠</span></div>
+      <div>
+        <input type="file" id="fFotoCasaInput" accept="image/*" capture="environment" style="display:none" onchange="handleFoto(this,'casa')">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('fFotoCasaInput').click()">Escolher foto</button>
+        <button type="button" class="btn btn-ghost" id="btnRemoverCasa" style="display:none" onclick="removerFoto('casa')">Remover</button>
+      </div>
+    </div>
+
+    <span class="adv-toggle" onclick="toggleAdv()">📍 já tenho as coordenadas (avançado)</span>
+    <div class="adv-fields" id="advFields">
+      <div><label>Latitude</label><input type="text" id="fLat" placeholder="-9.123456"></div>
+      <div><label>Longitude</label><input type="text" id="fLng" placeholder="-36.123456"></div>
+    </div>
+    <button type="button" class="btn-map-pick" onclick="abrirPicker()">🗺️ Escolher local no mapa</button>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" onclick="fecharForm()" style="flex:0.6">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCliente()">Salvar cliente</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-bg" id="origemSheetBg">
+  <div class="sheet">
+    <button class="close-x" onclick="fecharOrigemForm()">×</button>
+    <h2>Ponto de partida</h2>
+    <label>Nome do local</label>
+    <input type="text" id="oNome" placeholder="Ex: Lanchonete do Zé">
+    <p id="oLocalTexto" style="font-size:13px; color:var(--muted); margin-top:14px;">Localização ainda não definida.</p>
+    <button type="button" class="btn-map-pick" onclick="abrirPicker('origem')">🗺️ Escolher local no mapa</button>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" onclick="fecharOrigemForm()" style="flex:0.6">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarOrigem()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-bg" id="configSheetBg">
+  <div class="sheet">
+    <button class="close-x" onclick="fecharConfigForm()">×</button>
+    <h2>Trocar PIN</h2>
+    <label>PIN atual</label>
+    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="cPinAtual" placeholder="••••">
+    <label>Novo PIN</label>
+    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="cPinNovo" placeholder="••••">
+    <label>Confirme o novo PIN</label>
+    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="cPinNovo2" placeholder="••••">
+    <p id="configErro" style="display:none; color:var(--danger); font-size:13px; margin-top:8px;"></p>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" onclick="fecharConfigForm()" style="flex:0.6">Cancelar</button>
+      <button class="btn btn-primary" onclick="trocarPin()">Salvar novo PIN</button>
+    </div>
+  </div>
+</div>
+
+<div class="picker-bg" id="pickerBg">
+  <div class="picker-top">
+    <h3>Toque no mapa pra marcar o local</h3>
+    <button class="close-x" style="position:static;" onclick="fecharPicker()">×</button>
+  </div>
+  <div class="picker-hint" id="pickerHint">Arraste e toque no ponto certo. Depois confirme.</div>
+  <div id="pickerMap"></div>
+  <div class="picker-bottom">
+    <button class="btn btn-ghost" onclick="fecharPicker()">Cancelar</button>
+    <button class="btn btn-primary" onclick="confirmarPicker()">Confirmar local</button>
+  </div>
+</div>
+
+<div class="lightbox-bg" id="lightboxBg" onclick="fecharLightbox()">
+  <button class="lightbox-close" onclick="event.stopPropagation(); fecharLightbox();">×</button>
+  <img id="lightboxImg" src="" alt="foto" onclick="event.stopPropagation();">
+  <div class="lightbox-label" id="lightboxLabel"></div>
+</div>
+
+</div>
+
+<script>
+let clientes = JSON.parse(localStorage.getItem('rotaentrega_clientes') || '[]');
+let origem = JSON.parse(localStorage.getItem('rotaentrega_origem') || 'null');
+let tab = 'pendentes';
+let pos = null;      // {lat,lng}
+let heading = null;  // graus, 0 = norte
+let searchQuery = '';
+let overlayCount = 0;
+
+// ---------- Bloqueio por PIN ----------
+const PIN_KEY = 'rotaentrega_pin_hash';
+let lockModo = 'entrar';
+async function sha256Hex(texto){
+  const enc = new TextEncoder().encode(texto);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function iniciarLock(){
+  const hashSalvo = localStorage.getItem(PIN_KEY);
+  const erroEl = document.getElementById('lockErro');
+  erroEl.style.display = 'none';
+  document.getElementById('lockInput').value = '';
+  document.getElementById('lockInput2').value = '';
+  if(!hashSalvo){
+    lockModo = 'criar';
+    document.getElementById('lockTitulo').textContent = 'Crie um PIN de acesso';
+    document.getElementById('lockSub').textContent = 'Use de 4 a 6 números. Só você vai saber.';
+    document.getElementById('lockInput').placeholder = 'Novo PIN';
+    document.getElementById('lockInput2').style.display = 'block';
+    document.getElementById('lockBtn').textContent = 'Criar PIN';
+  } else {
+    lockModo = 'entrar';
+    document.getElementById('lockTitulo').textContent = 'Digite seu PIN';
+    document.getElementById('lockSub').textContent = 'Só você tem acesso a esse app.';
+    document.getElementById('lockInput').placeholder = '••••';
+    document.getElementById('lockInput2').style.display = 'none';
+    document.getElementById('lockBtn').textContent = 'Entrar';
+  }
+  document.getElementById('lockBg').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'none';
+  setTimeout(()=>document.getElementById('lockInput').focus(), 150);
+}
+async function lockSubmit(){
+  const erroEl = document.getElementById('lockErro');
+  const v1 = document.getElementById('lockInput').value.trim();
+  if(lockModo === 'criar'){
+    const v2 = document.getElementById('lockInput2').value.trim();
+    if(v1.length < 4){ erroEl.textContent='O PIN precisa ter pelo menos 4 números.'; erroEl.style.display='block'; return; }
+    if(v1 !== v2){ erroEl.textContent='Os PINs não são iguais.'; erroEl.style.display='block'; return; }
+    const hash = await sha256Hex(v1);
+    localStorage.setItem(PIN_KEY, hash);
+    entrarNoApp();
+  } else {
+    const hash = await sha256Hex(v1);
+    const salvo = localStorage.getItem(PIN_KEY);
+    if(hash === salvo){
+      entrarNoApp();
+    } else {
+      erroEl.textContent = 'PIN incorreto. Tente de novo.';
+      erroEl.style.display = 'block';
+      document.getElementById('lockInput').value = '';
+      document.getElementById('lockInput').focus();
+    }
+  }
+}
+function entrarNoApp(){
+  document.getElementById('lockBg').style.display = 'none';
+  document.getElementById('appContent').style.display = 'block';
+}
+function bloquearAgora(){
+  iniciarLock();
+}
+function abrirConfigForm(){
+  document.getElementById('cPinAtual').value = '';
+  document.getElementById('cPinNovo').value = '';
+  document.getElementById('cPinNovo2').value = '';
+  document.getElementById('configErro').style.display = 'none';
+  travarScroll();
+  document.getElementById('configSheetBg').classList.add('open');
+}
+function fecharConfigForm(){
+  document.getElementById('configSheetBg').classList.remove('open');
+  destravarScroll();
+}
+async function trocarPin(){
+  const erroEl = document.getElementById('configErro');
+  const atual = document.getElementById('cPinAtual').value.trim();
+  const novo = document.getElementById('cPinNovo').value.trim();
+  const novo2 = document.getElementById('cPinNovo2').value.trim();
+  const salvo = localStorage.getItem(PIN_KEY);
+  const hashAtual = await sha256Hex(atual);
+  if(hashAtual !== salvo){ erroEl.textContent = 'PIN atual incorreto.'; erroEl.style.display='block'; return; }
+  if(novo.length < 4){ erroEl.textContent = 'O novo PIN precisa ter pelo menos 4 números.'; erroEl.style.display='block'; return; }
+  if(novo !== novo2){ erroEl.textContent = 'Os novos PINs não são iguais.'; erroEl.style.display='block'; return; }
+  const hashNovo = await sha256Hex(novo);
+  localStorage.setItem(PIN_KEY, hashNovo);
+  fecharConfigForm();
+  mostrarAviso('PIN alterado com sucesso.');
+}
+function travarScroll(){
+  overlayCount++;
+  document.body.classList.add('no-scroll');
+}
+function destravarScroll(){
+  overlayCount = Math.max(0, overlayCount-1);
+  if(overlayCount===0) document.body.classList.remove('no-scroll');
+}
+
+function salvar(){
+  try{
+    localStorage.setItem('rotaentrega_clientes', JSON.stringify(clientes));
+  } catch(e){
+    mostrarAviso('Armazenamento cheio! Não deu pra salvar essa foto/cliente. Remova fotos antigas e tente de novo.');
+    return;
+  }
+  render();
+  if(tab==='mapa') renderMapaGeral();
+}
+
+function setTab(t){
+  tab = t;
+  document.getElementById('tabPendentes').classList.toggle('active', t==='pendentes');
+  document.getElementById('tabTodos').classList.toggle('active', t==='todos');
+  document.getElementById('tabMapa').classList.toggle('active', t==='mapa');
+  document.getElementById('lista').style.display = (t==='mapa') ? 'none' : '';
+  document.getElementById('mapaView').style.display = (t==='mapa') ? 'block' : 'none';
+  document.getElementById('searchWrap').style.display = (t==='mapa') ? 'none' : 'flex';
+  if(t==='mapa'){
+    setTimeout(()=>{ initMapaGeral(); renderMapaGeral(); }, 30);
+  } else {
+    render();
+  }
+}
+
+// ---------- Mapa geral (aba Mapa) ----------
+let mapaGeral = null, mapaGeralMarkers = [];
+function initMapaGeral(){
+  if(mapaGeral) { mapaGeral.invalidateSize(); return; }
+  const centro = pos ? [pos.lat,pos.lng] : [-9.6, -35.7];
+  mapaGeral = L.map('mapaLeaflet').setView(centro, pos ? 14 : 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap'
+  }).addTo(mapaGeral);
+}
+function renderMapaGeral(){
+  if(!mapaGeral) return;
+  mapaGeralMarkers.forEach(m => mapaGeral.removeLayer(m));
+  mapaGeralMarkers = [];
+
+  if(origem && origem.lat!=null){
+    const iconOrigem = L.divIcon({
+      html:`<div style="width:20px;height:20px;border-radius:6px;background:#4a90ff;border:2px solid #10131a;display:flex;align-items:center;justify-content:center;font-size:11px;">🏪</div>`,
+      className:'', iconSize:[20,20], iconAnchor:[10,10]
+    });
+    const mkOrigem = L.marker([origem.lat,origem.lng], {icon:iconOrigem}).addTo(mapaGeral);
+    mkOrigem.bindPopup(`<b>${esc(origem.nome)}</b><br>Ponto de partida`);
+    mapaGeralMarkers.push(mkOrigem);
+  }
+
+  const comLocal = clientes.filter(c => c.lat!=null);
+  comLocal.forEach(c => {
+    const cor = c.status==='entregue' ? '#ff5722' : '#4ade80';
+    const icon = L.divIcon({
+      html:`<div style="width:16px;height:16px;border-radius:50%;background:${cor};border:2px solid #10131a;"></div>`,
+      className:'', iconSize:[16,16], iconAnchor:[8,8]
+    });
+    const mk = L.marker([c.lat,c.lng], {icon}).addTo(mapaGeral);
+    mk.bindPopup(`<b>${esc(c.nome)}</b><br>${esc(c.endereco)}`);
+    mk.on('click', ()=>{ setTab('pendentes'); editarCliente(c.id); });
+    mapaGeralMarkers.push(mk);
+  });
+  if(mapaGeralMarkers.length){
+    const grupo = L.featureGroup(mapaGeralMarkers);
+    mapaGeral.fitBounds(grupo.getBounds().pad(0.25));
+  }
+}
+
+// ---------- Estabelecimento (ponto de partida) ----------
+let oLat = null, oLng = null;
+function atualizarTextoOrigem(){
+  const texto = (oLat!=null) ? `Local definido (${oLat.toFixed(5)}, ${oLng.toFixed(5)})` : 'Localização ainda não definida.';
+  document.getElementById('oLocalTexto').textContent = texto;
+}
+function abrirOrigemForm(){
+  document.getElementById('oNome').value = origem ? origem.nome : '';
+  oLat = origem ? origem.lat : null;
+  oLng = origem ? origem.lng : null;
+  atualizarTextoOrigem();
+  travarScroll();
+  document.getElementById('origemSheetBg').classList.add('open');
+}
+function fecharOrigemForm(){
+  document.getElementById('origemSheetBg').classList.remove('open');
+  destravarScroll();
+}
+function salvarOrigem(){
+  const nome = document.getElementById('oNome').value.trim() || 'Estabelecimento';
+  if(oLat==null){ mostrarAviso('Escolha o local no mapa antes de salvar.'); return; }
+  origem = {nome, lat:oLat, lng:oLng};
+  localStorage.setItem('rotaentrega_origem', JSON.stringify(origem));
+  fecharOrigemForm();
+  if(tab==='mapa') renderMapaGeral();
+}
+
+// ---------- Seletor de pino (picker) ----------
+let pickerMap = null, pickerMarker = null, pickerLat = null, pickerLng = null, pickerTarget = 'cliente';
+function abrirPicker(target){
+  pickerTarget = target || 'cliente';
+  travarScroll();
+  document.getElementById('pickerBg').classList.add('open');
+  setTimeout(()=>{
+    let latAtual, lngAtual;
+    if(pickerTarget === 'origem'){
+      latAtual = oLat ?? (pos?pos.lat:-9.6);
+      lngAtual = oLng ?? (pos?pos.lng:-35.7);
+    } else {
+      latAtual = parseFloat(document.getElementById('fLat').value) || (pos?pos.lat:-9.6);
+      lngAtual = parseFloat(document.getElementById('fLng').value) || (pos?pos.lng:-35.7);
+    }
+    if(!pickerMap){
+      pickerMap = L.map('pickerMap').setView([latAtual,lngAtual], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom:19, attribution:'© OpenStreetMap'
+      }).addTo(pickerMap);
+      pickerMap.on('click', e => colocarPickerMarker(e.latlng.lat, e.latlng.lng));
+    } else {
+      pickerMap.invalidateSize();
+      pickerMap.setView([latAtual,lngAtual], 15);
+    }
+    colocarPickerMarker(latAtual, lngAtual);
+  }, 30);
+}
+function colocarPickerMarker(lat,lng){
+  pickerLat = lat; pickerLng = lng;
+  if(pickerMarker) pickerMap.removeLayer(pickerMarker);
+  pickerMarker = L.marker([lat,lng], {draggable:true}).addTo(pickerMap);
+  pickerMarker.on('dragend', ()=>{
+    const p = pickerMarker.getLatLng();
+    pickerLat = p.lat; pickerLng = p.lng;
+  });
+}
+function fecharPicker(){
+  document.getElementById('pickerBg').classList.remove('open');
+  destravarScroll();
+}
+function confirmarPicker(){
+  if(pickerTarget === 'origem'){
+    oLat = pickerLat; oLng = pickerLng;
+    atualizarTextoOrigem();
+  } else {
+    document.getElementById('fLat').value = pickerLat.toFixed(6);
+    document.getElementById('fLng').value = pickerLng.toFixed(6);
+    document.getElementById('advFields').classList.add('open');
+  }
+  fecharPicker();
+}
+
+// ---------- Fotos (pessoa / casa) ----------
+let fotoPessoaData = null, fotoCasaData = null;
+function handleFoto(input, tipo){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 700;
+      let w = img.width, h = img.height;
+      if(w > maxDim || h > maxDim){
+        if(w > h){ h = Math.round(h*maxDim/w); w = maxDim; }
+        else { w = Math.round(w*maxDim/h); h = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+      if(tipo==='pessoa') fotoPessoaData = dataUrl; else fotoCasaData = dataUrl;
+      atualizarPreviewFoto(tipo, dataUrl);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+function atualizarPreviewFoto(tipo, dataUrl){
+  const prevId = tipo==='pessoa' ? 'previewPessoa' : 'previewCasa';
+  const btnId = tipo==='pessoa' ? 'btnRemoverPessoa' : 'btnRemoverCasa';
+  const placeholder = tipo==='pessoa' ? '👤' : '🏠';
+  document.getElementById(prevId).innerHTML = dataUrl ? `<img src="${dataUrl}">` : `<span class="foto-placeholder">${placeholder}</span>`;
+  document.getElementById(btnId).style.display = dataUrl ? 'inline-block' : 'none';
+}
+function removerFoto(tipo){
+  if(tipo==='pessoa') fotoPessoaData = null; else fotoCasaData = null;
+  atualizarPreviewFoto(tipo, null);
+}
+
+// ---------- GPS ----------
+function gpsStatus(ok, texto){
+  const dot = document.getElementById('gpsDot');
+  dot.className = 'dot ' + (ok ? 'on' : 'off');
+  document.getElementById('gpsText').textContent = texto;
+}
+if('geolocation' in navigator){
+  navigator.geolocation.watchPosition(
+    p => { pos = {lat:p.coords.latitude, lng:p.coords.longitude}; gpsStatus(true,'GPS ativo'); render(); },
+    err => { gpsStatus(false,'sem sinal'); },
+    {enableHighAccuracy:true, maximumAge:5000, timeout:15000}
+  );
+} else {
+  gpsStatus(false,'sem GPS');
+}
+window.addEventListener('deviceorientationabsolute', e => { heading = e.alpha; render(); }, true);
+window.addEventListener('deviceorientation', e => { if(heading===null) { heading = e.alpha; render(); } }, true);
+
+// ---------- Cálculos ----------
+function distanciaMetros(a,b){
+  const R=6371000, toRad = d=>d*Math.PI/180;
+  const dLat = toRad(b.lat-a.lat), dLng = toRad(b.lng-a.lng);
+  const s = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return R * 2*Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+}
+function bearing(a,b){
+  const toRad = d=>d*Math.PI/180, toDeg = r=>r*180/Math.PI;
+  const y = Math.sin(toRad(b.lng-a.lng))*Math.cos(toRad(b.lat));
+  const x = Math.cos(toRad(a.lat))*Math.sin(toRad(b.lat)) - Math.sin(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.cos(toRad(b.lng-a.lng));
+  return (toDeg(Math.atan2(y,x))+360)%360;
+}
+function fmtDist(m){
+  if(m < 1000) return Math.round(m)+' m';
+  return (m/1000).toFixed(1)+' km';
+}
+
+// ---------- Render ----------
+function normalizarTexto(s){
+  return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
+function onSearchInput(valor){
+  searchQuery = normalizarTexto(valor.trim());
+  document.getElementById('searchClear').style.display = valor ? 'inline-block' : 'none';
+  render();
+}
+function limparBusca(){
+  document.getElementById('searchInput').value = '';
+  searchQuery = '';
+  document.getElementById('searchClear').style.display = 'none';
+  render();
+}
+function render(){
+  const lista = document.getElementById('lista');
+  let itens = clientes.filter(c => tab==='todos' ? true : c.status !== 'entregue');
+
+  if(searchQuery){
+    itens = itens.filter(c => normalizarTexto(c.nome).includes(searchQuery));
+  }
+
+  itens.forEach(c => {
+    c._dist = (pos && c.lat!=null) ? distanciaMetros(pos,{lat:c.lat,lng:c.lng}) : null;
+  });
+  itens.sort((a,b) => {
+    if(a._dist==null && b._dist==null) return 0;
+    if(a._dist==null) return 1;
+    if(b._dist==null) return -1;
+    return a._dist - b._dist;
+  });
+
+  const avisoHtml = avisoTemp ? `<div style="background:var(--surface-2); border:1px solid var(--yellow); color:var(--yellow); padding:10px 14px; border-radius:10px; font-size:13px; margin-bottom:12px;">${esc(avisoTemp)}</div>` : '';
+
+  if(itens.length===0){
+    const msg = searchQuery
+      ? `<b>Nenhum cliente encontrado</b>Ninguém com "${esc(document.getElementById('searchInput').value)}" no nome.`
+      : `<b>${tab==='todos' ? 'Nenhum cliente cadastrado' : 'Nenhuma entrega pendente'}</b>Toque em "+ Cliente" para adicionar um endereço.`;
+    lista.innerHTML = avisoHtml + `<div class="empty">${msg}</div>`;
+    return;
+  }
+
+  lista.innerHTML = avisoHtml + itens.map((c, i) => {
+    const entregue = c.status === 'entregue';
+    let statsHtml = '';
+    if(c.lat!=null){
+      if(c._dist!=null){
+        const b = bearing(pos, {lat:c.lat,lng:c.lng});
+        const rot = heading!=null ? (b - heading) : b;
+        statsHtml = `<div class="stats">
+          <div class="stat"><span class="stat-value">${fmtDist(c._dist)}</span></div>
+          <div class="stat"><svg class="arrow" style="transform:rotate(${rot}deg)" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 L19 21 L12 17 L5 21 Z"/></svg><span class="stat-label">direção</span></div>
+        </div>`;
+      } else {
+        statsHtml = `<div class="stats"><span class="stat-label">local salvo · aguardando GPS</span></div>`;
+      }
+    } else {
+      statsHtml = `<div class="no-loc">sem localização salva ainda</div>`;
+    }
+
+    return `<div class="card ${entregue?'delivered':''}">
+      <div class="card-top">
+        <div class="num">${entregue?'✓':(i+1)}</div>
+        <div class="info">
+          <p class="nome">${esc(c.nome)}</p>
+          <p class="end">${esc(c.endereco)}</p>
+          ${c.telefone ? `<p class="tel">${esc(c.telefone)}</p>` : ''}
+          ${(c.fotoPessoa || c.fotoCasa) ? `<div class="card-fotos">
+            ${c.fotoPessoa ? `<div class="foto-item"><img src="${c.fotoPessoa}" alt="foto da pessoa" onclick="abrirLightbox('${c.id}','pessoa')"><span>Pessoa</span></div>` : ''}
+            ${c.fotoCasa ? `<div class="foto-item"><img src="${c.fotoCasa}" alt="foto da casa" onclick="abrirLightbox('${c.id}','casa')"><span>Casa</span></div>` : ''}
+          </div>` : ''}
+        </div>
+      </div>
+      ${statsHtml}
+      <div class="actions">
+        ${confirmandoExclusao === c.id ? `
+          <span class="stat-label" style="width:100%; color:var(--danger); font-weight:600; margin-bottom:4px;">Excluir ${esc(c.nome)} e o endereço salvo?</span>
+          <button class="btn btn-danger" onclick="confirmarExclusao('${c.id}')" style="border-style:solid; background:var(--danger); color:#1a0d05;">Sim, excluir</button>
+          <button class="btn btn-ghost" onclick="cancelarExclusao()">Cancelar</button>
+        ` : `
+          <button class="btn btn-primary" onclick="abrirMaps('${c.id}')">🧭 Abrir no Maps</button>
+          <button class="btn btn-ghost" onclick="marcarAqui('${c.id}')">📍 Marcar aqui</button>
+          <button class="btn ${entregue?'btn-ghost':'btn-success'}" onclick="toggleEntregue('${c.id}')">${entregue?'Reabrir':'✓ Entregue'}</button>
+          <button class="btn btn-edit" onclick="editarCliente('${c.id}')">Editar</button>
+          <button class="btn btn-danger" onclick="excluirCliente('${c.id}')">Excluir</button>
+        `}
+      </div>
+    </div>`;
+  }).join('');
+}
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+// ---------- Lightbox de fotos ----------
+function abrirLightbox(id, tipo){
+  const c = clientes.find(x=>x.id===id);
+  const src = tipo==='pessoa' ? c.fotoPessoa : c.fotoCasa;
+  if(!src) return;
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightboxLabel').textContent = `${esc(c.nome)} · ${tipo==='pessoa' ? 'foto da pessoa' : 'foto da casa'}`;
+  document.getElementById('lightboxBg').classList.add('open');
+  travarScroll();
+}
+function fecharLightbox(){
+  document.getElementById('lightboxBg').classList.remove('open');
+  destravarScroll();
+}
+
+// ---------- Ações ----------
+function abrirMaps(id){
+  const c = clientes.find(x=>x.id===id);
+  let url = 'https://www.google.com/maps/dir/?api=1';
+  if(origem && origem.lat!=null){
+    url += `&origin=${origem.lat},${origem.lng}`;
+  }
+  if(c.lat!=null){
+    url += `&destination=${c.lat},${c.lng}`;
+  } else {
+    url += `&destination=${encodeURIComponent(c.endereco)}`;
+  }
+  window.open(url, '_blank');
+  if(!origem || origem.lat==null){
+    mostrarAviso('Dica: defina o "🏪 Local" no topo pra rota sempre sair de lá.');
+  }
+}
+let avisoTemp = null;
+function mostrarAviso(msg){
+  avisoTemp = msg;
+  render();
+  setTimeout(()=>{ avisoTemp = null; render(); }, 3000);
+}
+function marcarAqui(id){
+  if(!pos){ mostrarAviso('Ainda esperando o GPS encontrar sua localização. Tente de novo em alguns segundos.'); return; }
+  const c = clientes.find(x=>x.id===id);
+  c.lat = pos.lat; c.lng = pos.lng;
+  salvar();
+}
+function toggleEntregue(id){
+  const c = clientes.find(x=>x.id===id);
+  c.status = c.status==='entregue' ? 'pendente' : 'entregue';
+  salvar();
+}
+let confirmandoExclusao = null;
+function excluirCliente(id){
+  confirmandoExclusao = id;
+  render();
+}
+function cancelarExclusao(){
+  confirmandoExclusao = null;
+  render();
+}
+function confirmarExclusao(id){
+  clientes = clientes.filter(x=>x.id!==id);
+  confirmandoExclusao = null;
+  salvar();
+}
+
+// ---------- Formulário ----------
+function toggleAdv(){ document.getElementById('advFields').classList.toggle('open'); }
+function abrirForm(){
+  document.getElementById('formTitulo').textContent = 'Novo cliente';
+  document.getElementById('editId').value = '';
+  document.getElementById('fNome').value = '';
+  document.getElementById('fEndereco').value = '';
+  document.getElementById('fTel').value = '';
+  document.getElementById('fLat').value = '';
+  document.getElementById('fLng').value = '';
+  document.getElementById('advFields').classList.remove('open');
+  document.getElementById('formErro').style.display = 'none';
+  fotoPessoaData = null; fotoCasaData = null;
+  atualizarPreviewFoto('pessoa', null);
+  atualizarPreviewFoto('casa', null);
+  travarScroll();
+  document.getElementById('sheetBg').classList.add('open');
+}
+function editarCliente(id){
+  const c = clientes.find(x=>x.id===id);
+  document.getElementById('formTitulo').textContent = 'Editar cliente';
+  document.getElementById('editId').value = c.id;
+  document.getElementById('fNome').value = c.nome;
+  document.getElementById('fEndereco').value = c.endereco;
+  document.getElementById('fTel').value = c.telefone || '';
+  document.getElementById('fLat').value = c.lat ?? '';
+  document.getElementById('fLng').value = c.lng ?? '';
+  document.getElementById('advFields').classList.toggle('open', c.lat!=null);
+  document.getElementById('formErro').style.display = 'none';
+  fotoPessoaData = c.fotoPessoa || null;
+  fotoCasaData = c.fotoCasa || null;
+  atualizarPreviewFoto('pessoa', fotoPessoaData);
+  atualizarPreviewFoto('casa', fotoCasaData);
+  travarScroll();
+  document.getElementById('sheetBg').classList.add('open');
+}
+function fecharForm(){
+  document.getElementById('sheetBg').classList.remove('open');
+  destravarScroll();
+}
+function salvarCliente(){
+  const nome = document.getElementById('fNome').value.trim();
+  const endereco = document.getElementById('fEndereco').value.trim();
+  const tel = document.getElementById('fTel').value.trim();
+  const latRaw = document.getElementById('fLat').value.trim();
+  const lngRaw = document.getElementById('fLng').value.trim();
+  const erroEl = document.getElementById('formErro');
+  if(!nome || !endereco){ erroEl.textContent = 'Preencha nome e endereço.'; erroEl.style.display='block'; return; }
+  erroEl.style.display='none';
+  const lat = latRaw ? parseFloat(latRaw.replace(',','.')) : null;
+  const lng = lngRaw ? parseFloat(lngRaw.replace(',','.')) : null;
+
+  const editId = document.getElementById('editId').value;
+  if(editId){
+    const c = clientes.find(x=>x.id===editId);
+    c.nome=nome; c.endereco=endereco; c.telefone=tel;
+    if(lat!=null && lng!=null){ c.lat=lat; c.lng=lng; }
+    c.fotoPessoa = fotoPessoaData; c.fotoCasa = fotoCasaData;
+  } else {
+    clientes.push({
+      id: 'c'+Date.now()+Math.random().toString(16).slice(2),
+      nome, endereco, telefone: tel,
+      lat, lng,
+      fotoPessoa: fotoPessoaData, fotoCasa: fotoCasaData,
+      status: 'pendente'
+    });
+  }
+  fecharForm();
+  salvar();
+}
+
+render();
+iniciarLock();
+</script>
+</body>
+</html>
